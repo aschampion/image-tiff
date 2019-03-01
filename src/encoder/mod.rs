@@ -277,15 +277,16 @@ impl<'a, W: Write + Seek> DirectoryEncoder<'a, W> {
     }
 
     /// Write a single ifd tag.
-    pub fn write_tag<T: TiffValue>(&mut self, tag: Tag, value: T) {
+    pub fn write_tag<T: TiffValue>(&mut self, tag: Tag, value: T) -> TiffResult<()> {
         let len = <T>::BYTE_LEN * value.count();
         let mut bytes = Vec::with_capacity(len as usize);
         {
             let mut writer = TiffWriter::new(&mut bytes);
-            value.write(&mut writer).unwrap();
+            value.write(&mut writer)?;
         }
 
         self.ifd.insert(tag.to_u16(), (<T>::FIELD_TYPE as u16, value.count(), bytes));
+        Ok(())
     }
 
     fn write_directory(&mut self) -> TiffResult<u64> {
@@ -402,19 +403,19 @@ impl<'a, W: Write + Seek, T: ColorType> ImageEncoder<'a, W, T> {
 
         let strip_count = (u64::from(height) + rows_per_strip - 1) / rows_per_strip;
 
-        encoder.write_tag(Tag::ImageWidth, width);
-        encoder.write_tag(Tag::ImageLength, height);
-        encoder.write_tag(Tag::Compression, 1u16);
+        encoder.write_tag(Tag::ImageWidth, width)?;
+        encoder.write_tag(Tag::ImageLength, height)?;
+        encoder.write_tag(Tag::Compression, 1u16)?;
 
-        encoder.write_tag(Tag::BitsPerSample, <T>::BITS_PER_SAMPLE);
-        encoder.write_tag(Tag::PhotometricInterpretation, <T>::TIFF_VALUE as u16);
+        encoder.write_tag(Tag::BitsPerSample, <T>::BITS_PER_SAMPLE)?;
+        encoder.write_tag(Tag::PhotometricInterpretation, <T>::TIFF_VALUE as u16)?;
 
-        encoder.write_tag(Tag::RowsPerStrip, rows_per_strip as u32);
+        encoder.write_tag(Tag::RowsPerStrip, rows_per_strip as u32)?;
 
-        encoder.write_tag(Tag::SamplesPerPixel, <T>::BITS_PER_SAMPLE.len() as u16);
-        encoder.write_tag(Tag::XResolution, Rational {n: 1, d: 1});
-        encoder.write_tag(Tag::YResolution, Rational {n: 1, d: 1});
-        encoder.write_tag(Tag::ResolutionUnit, 1u16);
+        encoder.write_tag(Tag::SamplesPerPixel, <T>::BITS_PER_SAMPLE.len() as u16)?;
+        encoder.write_tag(Tag::XResolution, Rational {n: 1, d: 1})?;
+        encoder.write_tag(Tag::YResolution, Rational {n: 1, d: 1})?;
+        encoder.write_tag(Tag::ResolutionUnit, 1u16)?;
         
         Ok(ImageEncoder {
             encoder,
@@ -457,30 +458,31 @@ impl<'a, W: Write + Seek, T: ColorType> ImageEncoder<'a, W, T> {
     }
 
     /// Set image resolution
-    pub fn resolution(&mut self, unit: ResolutionUnit, value: Rational) {
-        self.encoder.write_tag(Tag::ResolutionUnit, unit as u16);
-        self.encoder.write_tag(Tag::XResolution, value.clone());
-        self.encoder.write_tag(Tag::YResolution, value);
+    pub fn resolution(&mut self, unit: ResolutionUnit, value: Rational) -> TiffResult<()> {
+        self.encoder.write_tag(Tag::ResolutionUnit, unit as u16)?;
+        self.encoder.write_tag(Tag::XResolution, value.clone())?;
+        self.encoder.write_tag(Tag::YResolution, value)?;
+        Ok(())
     }
 
     /// Set image resolution unit
-    pub fn resolution_unit(&mut self, unit: ResolutionUnit) {
-        self.encoder.write_tag(Tag::ResolutionUnit, unit as u16);
+    pub fn resolution_unit(&mut self, unit: ResolutionUnit) -> TiffResult<()> {
+        self.encoder.write_tag(Tag::ResolutionUnit, unit as u16)
     }
 
     /// Set image x-resolution
-    pub fn x_resolution(&mut self, value: Rational) {
-        self.encoder.write_tag(Tag::XResolution, value);
+    pub fn x_resolution(&mut self, value: Rational) -> TiffResult<()> {
+        self.encoder.write_tag(Tag::XResolution, value)
     }
 
     /// Set image y-resolution
-    pub fn y_resolution(&mut self, value: Rational) {
-        self.encoder.write_tag(Tag::YResolution, value);
+    pub fn y_resolution(&mut self, value: Rational) -> TiffResult<()> {
+        self.encoder.write_tag(Tag::YResolution, value)
     }
 
     fn finish_internal(&mut self) -> TiffResult<()> {
-        self.encoder.write_tag(Tag::StripOffsets, &*self.strip_offsets);
-        self.encoder.write_tag(Tag::StripByteCounts, &*self.strip_byte_count);
+        self.encoder.write_tag(Tag::StripOffsets, &*self.strip_offsets)?;
+        self.encoder.write_tag(Tag::StripByteCounts, &*self.strip_byte_count)?;
         self.dropped = true;
 
         self.encoder.finish_internal()
